@@ -50,6 +50,11 @@ var form = querystring.stringify({
 
 var lvName = process.argv[2];
 
+var flg = false;
+if (process.argv.length > 3){
+  flg = true;
+}
+
 var p1 = new Promise(
   function(resolve, reject){
 
@@ -129,6 +134,7 @@ Promise.all([p1,p2]).then(function(value){
   var dataStock = '';
   var tmpChat = '';
   var chatArr = [];
+  var handleName = {4737425:"盛本修"};
 
   client.on('data', function(data) {
     //console.log('' + data);
@@ -143,7 +149,10 @@ Promise.all([p1,p2]).then(function(value){
         "chat":tmpChat.match(/<chat.+?>(.+?)<\/chat>/)[1],
         "user_id":tmpChat.match(/user_id=\"(.+?)\"/)[1],
       });
-      console.log(chatArr[chatArr.length-1]["chat"]);
+      var username = (chatArr[chatArr.length-1].user_id in handleName) ? handleName[chatArr[chatArr.length-1].user_id] : "184";
+      if (chatArr[chatArr.length-1]["chat"].search(/http/) > 0 || flg) {
+        console.log(username + ":" + chatArr[chatArr.length-1]["chat"]);
+      }
       dataStock = dataStock.slice(dataStock.search(/<\/chat>/)+7);
     }
     // Close the client socket completely
