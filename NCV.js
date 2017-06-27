@@ -9,6 +9,7 @@ var HOST = '';
 var PORT = 0;
 var thread = '';
 
+// login request
 var options = {
     hostname: 'secure.nicovideo.jp',
     port: 443,
@@ -29,6 +30,17 @@ var options2 = {
         'Cookie': ''
     }
 };
+
+var options3 = {
+    hostname: 'ext.nicovideo.jp',
+    port: 80,
+    path: '/api/getthumbinfo/',
+    method: 'GET',
+    headers:{
+        //'Cookie': ''
+    }
+};
+
 
 // read yamlFile
 var text = fs.readFileSync('./conf.yml','utf8');
@@ -84,6 +96,8 @@ var p1 = new Promise(
     req.end();
 });
 
+console.log('----debug line----');
+
 var p2 = new Promise(function(resolve,reject){
   p1.then(function(){
 
@@ -99,6 +113,7 @@ var p2 = new Promise(function(resolve,reject){
       });
 
       res2.on('end', function(){
+        console.log(body);
         console.log(body.slice(body.indexOf('<addr>')+6,body.indexOf('</addr>')));
         console.log(body.slice(body.indexOf('<port>')+6,body.indexOf('</port>')));
         console.log(body.slice(body.indexOf('<thread>')+8,body.indexOf('</thread>')));
@@ -136,22 +151,72 @@ Promise.all([p1,p2]).then(function(value){
   var chatArr = [];
   var handleName = {4737425:"盛本修"};
 
+  fs.writeFile('fullLog', 'start\n', function(err){console.log(err);});
+  fs.writeFile('chatLog', 'start\n', function(err){console.log(err);});
+  fs.writeFile('videoIdLog', 'start\n', function(err){console.log(err);});
+
   client.on('data', function(data) {
     //console.log('' + data);
     dataStock += data;
+    fs.appendFile('fulllog', data, function(err){console.log(err)});
     while(dataStock.search(/\/>/) > 0 || dataStock.search(/<\/chat>/) > 0){
       dataStock = dataStock.slice(dataStock.search(/\/>/)+2);
       //console.log(dataStock.slice(0, dataStock.search(/<\/chat>/)+7));
       tmpChat = dataStock.slice(0, dataStock.search(/<\/chat>/)+7);
       //console.log(tmpChat);
+    
       chatArr.push({
         "no":tmpChat.match(/no=\"(.+?)\"/)[1],
         "chat":tmpChat.match(/<chat.+?>(.+?)<\/chat>/)[1],
         "user_id":tmpChat.match(/user_id=\"(.+?)\"/)[1],
       });
-      var username = (chatArr[chatArr.length-1].user_id in handleName) ? handleName[chatArr[chatArr.length-1].user_id] : "184";
-      if (chatArr[chatArr.length-1]["chat"].search(/http/) > 0 || flg) {
-        console.log(username + ":" + chatArr[chatArr.length-1]["chat"]);
+
+      var chatIdx = chatArr.length -1;
+      var username = (chatArr[chatIdx].user_id in handleName) ? handleName[chatArr[chatIdx].user_id] : "184";
+
+      if (chatArr[chatIdx]["chat"].search(/http/) > 0 || flg) {
+        console.log(username + ":" + chatArr[chatIdx]["chat"]);
+        fs.appendFile('chatlog', username + ":" + chatArr[chatIdx]["chat"] + '\n','utf8',function(err){
+            //console.log(err);
+        });
+
+        // get movie info
+        var videoId = chatArr[chatIdx]["chat"];
+
+        console.log("permcheck:" + videoId.search(/\/perm/));
+
+        if (videoId.search(/\/perm/) < 0 && videoId.search(/www.nicovideo.jp\/watch\//) > 0) {
+            videoId = videoId.match(/\/watch\/(sm.+[0-9]?)/)[1];
+            console.log(videoId);
+        }
+
+        if (videoId != null && videoId.match(/^sm(.+[0-9]?)$/) != null) {
+        console.log("request video:" + videoId);
+        options3.path = '/api/getthumbinfo/' + videoId;
+        options3.headers['Cookie']=options2.headers['Cookie'];
+    
+        var req = http.request(options3, function(res) {
+            console.log('get response');
+            //console.log(res.statusCode);
+            if (res.statusCode == 200){
+                console.log('res');
+                res.on('data', function(data){
+                    var body = '' + data;
+                    console.log(body);
+                    console.log(body.slice(body.indexOf('<video_id>')+6,body.indexOf('</video_id>')));
+
+                });
+            }  
+        }).on('error', function(e) {
+            console.log('get thumb info error!!!');
+            //console.log(e);
+        });
+        console.log('post request');
+        req.end();
+        client.destroy();
+
+        }
+
       }
       dataStock = dataStock.slice(dataStock.search(/<\/chat>/)+7);
     }
